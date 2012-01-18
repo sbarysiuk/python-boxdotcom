@@ -1,5 +1,5 @@
 """
-Python bindings for the Box.net API
+Python bindings for the Box.com API
 
 Copyright (c) 2007 Thomas Van Machelen <thomas dot vanmachelen at gmail dot com>
 Copyright (c) 2007 John Stowers <john dot stowers at gmail dot com>
@@ -18,21 +18,18 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
 See the License for the specific language governing permissions and 
 limitations under the License. 
-
 """
 
-import urllib
-import urllib2
-import mimetools
-import mimetypes
-import os
-import sys
-
-from xml.dom.minidom import parseString
+import sys, os, urllib, urllib2, mimetools, mimetypes, webbrowser
 import xml.dom
+from xml.dom.minidom import parseString
+
+
+__version__ = '0.2.1'
+
 
 def get_content_type(filename):
-	return mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+    return mimetypes.guess_type(filename)[0] or 'application/octet-stream'
 
 ########################################################################
 # XML functionality
@@ -130,9 +127,9 @@ class BoxDotNetError(Exception):
     pass
 
 class BoxDotNet(object):
-    END_POINT = 'http://www.box.net/api/1.0/rest?'
+    END_POINT = 'http://www.box.com/api/1.0/rest?'
 
-    #The box.net return status codes are all over the show
+    #The box.com return status codes are all over the show
     # method_name : return_value_that_is_ok
     RETURN_CODES = {
         'get_ticket'        :   'get_ticket_ok',
@@ -144,21 +141,19 @@ class BoxDotNet(object):
         'delete'            :   's_delete_node'
     }
 
-    def __init__(self, browser="firefox"):
-        self.browser = browser
-
+    def __init__(self):
         self.__handlerCache={}
 
     #encodes the args and handles params[] supplied in a list
     @classmethod
     def __url_encode_params(cls, params={}):
-    	if not isinstance(params, dict):
-    		raise Exception("You must pass a dictionary!")
-    	params_list = []
-    	for k,v in params.items():
-    		if isinstance(v, list): params_list.extend([(k+'[]',x) for x in v])
-    		else:					params_list.append((k, v))
-    	return urllib.urlencode(params_list)
+        if not isinstance(params, dict):
+            raise Exception("You must pass a dictionary!")
+        params_list = []
+        for k,v in params.items():
+            if isinstance(v, list): params_list.extend([(k+'[]',x) for x in v])
+            else:					params_list.append((k, v))
+        return urllib.urlencode(params_list)
 
     @classmethod
     def check_errors(cls, method, xml):
@@ -167,15 +162,18 @@ class BoxDotNet(object):
         if status == cls.RETURN_CODES[method]:
             return
 
-        raise BoxDotNetError ("Box.net returned [%s] for action [%s]" % (status, method))
+        raise BoxDotNetError ("Box.com returned [%s] for action [%s]" % (status, method))
 
     def login(self, api_key):
         # get ticket
         rsp = self.get_ticket (api_key=api_key)
         ticket = rsp.ticket[0].elementText
+
         # open url
-        url = "http://www.box.net/api/1.0/auth/%s" % ticket
-        os.system('%s "%s"' % (self.browser, url))
+        url = "http://www.box.com/api/1.0/auth/%s" % ticket
+
+        #os.system('%s "%s"' % ("firefox", url))
+        webbrowser.open_new_tab(url)
 
         # get token
         rsp = self.get_auth_token(api_key=api_key, ticket=ticket)
@@ -184,7 +182,7 @@ class BoxDotNet(object):
 
     def __getattr__(self, method, **arg):
         """
-        Handle all box.net calls
+        Handle all box.com calls
         """
         if not self.__handlerCache.has_key(method):
             def handler(_self = self, _method = method, **arg):
@@ -209,22 +207,21 @@ class BoxDotNet(object):
 
         return self.__handlerCache[method]
 
-    #-------------------------------------------------------------------
-    #-------------------------------------------------------------------
+
     def upload(self, filename, **arg):
         """
-        Upload a file to box.net.
+        Upload a file to box.com
         """
 
         if filename == None:
             raise UploadException("filename OR jpegData must be specified")
 
         # verify key names
-        for a in arg.keys():
-            if a != "api_key" and a != "auth_token" and a != "folder_id" and a != 'share':
-                sys.stderr.write("Box.net api: warning: unknown parameter \"%s\" sent to Box.net.upload\n" % (a))
+        for a in arg:
+            if a not in ("api_key", "auth_token", "folder_id", 'share'):
+                sys.stderr.write("Box.com api: warning: unknown parameter \"%s\" sent to Box.com.upload\n" % (a))
 
-        url = 'http://upload.box.net/api/1.0/upload/%s/%s' % (arg['auth_token'], arg['folder_id'])
+        url = 'http://upload.box.com/api/1.0/upload/%s/%s' % (arg['auth_token'], arg['folder_id'])
 
         # construct POST data
         boundary = mimetools.choose_boundary()
@@ -246,12 +243,12 @@ class BoxDotNet(object):
         data = fp.read()
         fp.close()
 
-        postData = body.encode("utf_8") + data + \
-            ("\r\n--%s--" % (boundary)).encode("utf_8")
+        postData = body.encode("utf_8") + data +\
+                   ("\r\n--%s--" % (boundary)).encode("utf_8")
 
         request = urllib2.Request(url)
         request.add_data(postData)
-        request.add_header("Content-Type", \
+        request.add_header("Content-Type",\
             "multipart/form-data; boundary=%s" % boundary)
         response = urllib2.urlopen(request)
         rspXML = response.read()
