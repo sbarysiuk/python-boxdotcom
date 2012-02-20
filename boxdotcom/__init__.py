@@ -159,7 +159,7 @@ class BoxDotNet(object):
     def check_errors(cls, method, xml):
         status = xml.status[0].elementText
 
-        if status == cls.RETURN_CODES[method]:
+        if status == cls.RETURN_CODES.get(method, None):
             return
 
         raise BoxDotNetError ("Box.com returned [%s] for action [%s]" % (status, method))
